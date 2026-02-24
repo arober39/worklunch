@@ -40,3 +40,11 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# blog file
+otel_llm_launchdarkly.md
+
+# Python backend
+backend/__pycache__/
+backend/*.pyc
+backend/.env

@@ -1,0 +1,55 @@
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+    send_batch_size: 512
+
+  # Stamp traces with LD project identifier so the endpoint knows where they belong
+  resource/launchdarkly:
+    attributes:
+      - key: launchdarkly.project_id
+        value: "${env:LD_SDK_KEY}"
+        action: upsert
+
+exporters:
+  # Langfuse — LLM-specific traces with full prompt content
+  otlphttp/langfuse:
+    endpoint: https://us.cloud.langfuse.com/api/public/otel
+    headers:
+      Authorization: "Basic ${env:LANGFUSE_AUTH_HEADER}"
+
+  # LaunchDarkly — flag-correlated observability (no auth header needed;
+  # identification is via the launchdarkly.project_id resource attribute)
+  otlphttp/launchdarkly:
+    endpoint: https://otel.observability.app.launchdarkly.com
+
+  # Debug exporter for local development
+  debug:
+    verbosity: detailed
+
+service:
+  pipelines:
+    # Pipeline 1: Full LLM traces to Langfuse
+    traces/llm-observability:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [otlphttp/langfuse]
+
+    # Pipeline 2: Flag-correlated traces to LaunchDarkly
+    traces/feature-flags:
+      receivers: [otlp]
+      processors: [resource/launchdarkly, batch]
+      exporters: [otlphttp/launchdarkly]
+
+    # Pipeline 3: Debug output for development
+    traces/debug:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [debug]

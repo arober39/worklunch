@@ -6,6 +6,7 @@ export const FLAGS = {
   JOIN_COMMUNITY_REDESIGN: 'join-community-redesign',
   NEW_FILTER_LOCATION: 'new-filter-location',
   INLINE_FORM_VALIDATION: 'inline-form-validation',
+  AI_SUGGEST_ENABLED: 'ai-suggest-enabled',
 } as const;
 
 export function useFeatureFlag(flagKey: string, defaultValue: boolean = false): boolean {

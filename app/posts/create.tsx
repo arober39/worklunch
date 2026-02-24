@@ -11,12 +11,17 @@ import {
   StyleSheet,
   ActionSheetIOS,
   ActivityIndicator,
+  FlatList,
 } from 'react-native';
 import { router } from 'expo-router';
 import { Button } from '@/components/Button';
 import { Input } from '@/components/Input';
-import { useCreatePost, CATEGORIES, CATEGORY_LABELS } from '@/hooks/usePosts';
+import { SuggestedMatchCard } from '@/components/SuggestedMatchCard';
+import { useCreatePost, usePosts, CATEGORIES, CATEGORY_LABELS } from '@/hooks/usePosts';
 import { useSpaceStore } from '@/stores/spaceStore';
+import { useFeatureFlag, FLAGS } from '@/hooks/useFeatureFlags';
+import { useProfile } from '@/hooks/useProfile';
+import { useAISuggest, MatchedPost } from '@/hooks/useAISuggest';
 import { pickAndUploadPhoto, takeAndUploadPhoto } from '@/lib/uploadPhoto';
 import { PostCategory } from '@/types/database';
 
@@ -28,10 +33,46 @@ export default function CreatePostScreen() {
   const [uploading, setUploading] = useState(false);
   const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState(false);
+  const [suggestedMatches, setSuggestedMatches] = useState<MatchedPost[]>([]);
   const loadedPhotoUrlRef = useRef<string | null>(null);
 
   const { currentSpace } = useSpaceStore();
   const createPost = useCreatePost();
+  const aiSuggestEnabled = useFeatureFlag(FLAGS.AI_SUGGEST_ENABLED);
+  const { data: profile } = useProfile();
+  const { data: activePosts } = usePosts(currentSpace?.id);
+  const aiSuggest = useAISuggest();
+
+  const handleAISuggest = () => {
+    if (!title.trim()) return;
+
+    aiSuggest.mutate(
+      {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        category: category || undefined,
+        dietary_preferences: profile?.dietary_preferences || undefined,
+        allergies: profile?.allergies || undefined,
+        active_posts: (activePosts || []).map((p) => ({
+          id: p.id,
+          title: p.title,
+          description: p.description,
+          category: p.category,
+          user_name: p.user.name,
+        })),
+        ai_suggest_flag_value: aiSuggestEnabled,
+      },
+      {
+        onSuccess: (data) => {
+          setDescription(data.suggested_description);
+          setSuggestedMatches(data.matched_posts);
+        },
+        onError: (error) => {
+          Alert.alert('AI Suggest Error', (error as Error).message);
+        },
+      }
+    );
+  };
 
   const handleSelectPhoto = () => {
     if (Platform.OS === 'ios') {
@@ -214,6 +255,18 @@ export default function CreatePostScreen() {
           style={styles.textArea}
         />
 
+        {/* AI Suggest Button */}
+        {aiSuggestEnabled && (
+          <Button
+            title="AI Suggest"
+            variant="outline"
+            onPress={handleAISuggest}
+            loading={aiSuggest.isPending}
+            disabled={!title.trim()}
+            style={styles.aiSuggestButton}
+          />
+        )}
+
         {/* Category Selection */}
         <Text style={styles.label}>Category</Text>
         <View style={styles.categoryGrid}>
@@ -237,6 +290,26 @@ export default function CreatePostScreen() {
             </TouchableOpacity>
           ))}
         </View>
+
+        {/* Suggested Matches */}
+        {suggestedMatches.length > 0 && (
+          <View style={styles.matchesSection}>
+            <Text style={styles.matchesLabel}>Suggested Swaps</Text>
+            <FlatList
+              data={suggestedMatches}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              keyExtractor={(item) => item.post_id}
+              renderItem={({ item }) => (
+                <SuggestedMatchCard
+                  title={item.title}
+                  reason={item.reason}
+                  onPress={() => router.push(`/posts/${item.post_id}`)}
+                />
+              )}
+            />
+          </View>
+        )}
 
         <Button
           title="Post Lunch"
@@ -337,6 +410,9 @@ const styles = StyleSheet.create({
     height: 100,
     textAlignVertical: 'top',
   },
+  aiSuggestButton: {
+    marginBottom: 24,
+  },
   categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
@@ -359,6 +435,15 @@ const styles = StyleSheet.create({
   },
   categoryButtonTextSelected: {
     color: '#ffffff',
+  },
+  matchesSection: {
+    marginBottom: 24,
+  },
+  matchesLabel: {
+    color: '#e5e7eb',
+    fontWeight: '500',
+    marginBottom: 12,
+    fontSize: 15,
   },
   submitButton: {
     marginTop: 8,

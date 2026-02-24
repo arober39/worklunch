@@ -49,15 +49,21 @@ export function useUserSpaces() {
 
       if (spacesError) throw spacesError;
 
-      // Combine the data
-      return memberships.map((membership) => ({
-        id: membership.id,
-        department: membership.department,
-        floor: membership.floor,
-        desk_number: membership.desk_number,
-        role: membership.role as 'employee' | 'admin',
-        space: spaces?.find((s) => s.id === membership.space_id) as Space,
-      }));
+      // Combine the data, filtering out memberships where the space wasn't found
+      return memberships
+        .map((membership) => {
+          const space = spaces?.find((s) => s.id === membership.space_id);
+          if (!space) return null;
+          return {
+            id: membership.id,
+            department: membership.department,
+            floor: membership.floor,
+            desk_number: membership.desk_number,
+            role: membership.role as 'employee' | 'admin',
+            space,
+          };
+        })
+        .filter((m): m is UserSpaceMembership => m !== null);
     },
     enabled: !!user,
   });

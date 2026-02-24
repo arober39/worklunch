@@ -1,0 +1,22 @@
+services:
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol-contrib/config.yaml
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+    environment:
+      - LANGFUSE_AUTH_HEADER=${LANGFUSE_AUTH_HEADER}
+      - LD_SDK_KEY=${LD_SDK_KEY}
+
+  backend:
+    build: ./backend
+    ports:
+      - "8000:8000"
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - LD_SDK_KEY=${LD_SDK_KEY}
+      - OTEL_EXPORTER_ENDPOINT=http://otel-collector:4317
+    depends_on:
+      - otel-collector
